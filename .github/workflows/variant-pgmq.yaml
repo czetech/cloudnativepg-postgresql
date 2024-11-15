@@ -1,0 +1,115 @@
+name: Variant pgmq
+run-name: >-
+  ${{ github.event.head_commit.message
+      || github.event.pull_request.title
+      || (github.event_name == 'schedule' && 'Daily rebuild') }}
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    paths:
+    - .github/workflows/variant-pgmq.yaml
+    - variants/pgmq/**
+  push:
+    paths:
+    - .github/workflows/variant-pgmq.yaml
+    - variants/pgmq/**
+  schedule:
+  - cron: 0 1 * * *
+  workflow_dispatch: {}
+jobs:
+  get-tags:
+    name: Get tags
+    runs-on: ubuntu-24.04
+    outputs:
+      tags: ${{ steps.postgresql-tags.outputs.tags }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - id: postgresql-tags
+      name: Get PostgreSQL Tags
+      uses: ./.github/actions/postgresql-tags
+      with:
+        regex: ^1[4|5|6|7][\w]*(?:\.[0-9]+)?(?:-(?:debian|bullseye|bookworm))?$
+  build:
+    name: Build image
+    needs: get-tags
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: ${{ vars.IMAGE_NAME }}:${{ matrix.version }}-pgmq
+      POSTGRESQL_VERSION: ${{ matrix.version }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - if: github.ref == 'refs/heads/main'
+      name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Build image
+      uses: docker/build-push-action@v6
+      with:
+        build-args: POSTGRESQL_VERSION
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        context: variants/pgmq
+        load: true
+        tags: ${{ env.IMAGE }}
+    - name: Lint with Dockle
+      uses: erzz/dockle-action@v1
+      with:
+        image: ${{ env.IMAGE }}
+        dockle-version: 0.4.14
+        accept-keywords: key
+        accept-filenames: >-
+          usr/local/lib/python3.11/dist-packages/azure/core/settings.py,
+          usr/local/lib/python3.9/dist-packages/azure/core/settings.py
+    - name: Test image
+      run: |
+        CONTAINER_NAME=cloudnativepg-postgresql
+        CONTAINER_EXEC_CMD="docker exec $CONTAINER_NAME"
+        PSQL_CMD="$CONTAINER_EXEC_CMD psql --username postgres"
+        docker run \
+          --detach \
+          --env POSTGRES_PASSWORD=password \
+          --name $CONTAINER_NAME \
+          --user root \
+          "$IMAGE"
+        until $CONTAINER_EXEC_CMD pg_isready; do
+          sleep 1
+        done
+        $PSQL_CMD --command "CREATE EXTENSION pgmq"
+        echo Create extension OK
+        $PSQL_CMD --command "SELECT pgmq.create('queue')"
+        echo Create queue OK
+        $PSQL_CMD --command "SELECT * from pgmq.send(
+            queue_name => 'queue',
+            msg => '{\"foo\": \"bar\"}'
+          )"
+        echo Send to queue OK
+        QUEUE_POP_COUNT=$($PSQL_CMD \
+          --no-align \
+          --command "SELECT COUNT(*) from pgmq.pop('queue')" \
+          --tuples-only)
+        echo "Queue pop count \"$QUEUE_POP_COUNT\""
+        [[ $QUEUE_POP_COUNT == 1 ]]
+        echo Pop from queue OK
+      env:
+        IMAGE: ${{ env.IMAGE }}
+      timeout-minutes: 1
+    - if: github.ref == 'refs/heads/main'
+      name: Build and push image
+      uses: docker/build-push-action@v6
+      with:
+        build-args: POSTGRESQL_VERSION
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        context: variants/pgmq
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ env.IMAGE }}
+    strategy:
+      matrix:
+        version: ${{fromJson(needs.get-tags.outputs.tags)}}
+      fail-fast: false

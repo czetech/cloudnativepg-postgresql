@@ -1,0 +1,27 @@
+name: PostgreSQL tags
+description: >-
+  Getting all tags of CloudNativePG PostgreSQL images filtered with input regex
+inputs:
+  regex:
+    description: Regex to filter tags
+outputs:
+  tags:
+    description: JSON array of tags
+    value: ${{ steps.postgresql-tags.outputs.tags }}
+runs:
+  using: composite
+  steps:
+  - id: postgresql-tags
+    run: |
+      TAGS=$(
+        skopeo list-tags docker://ghcr.io/cloudnative-pg/postgresql |
+          jq -c --argjson regex "$REGEX_JSON" '.Tags | map(
+            select(
+              test($regex)
+            )
+          ) | sort'
+      )
+      echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+    shell: bash
+    env:
+      REGEX_JSON: ${{ toJSON(inputs.regex) }}

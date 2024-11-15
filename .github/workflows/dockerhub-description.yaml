@@ -1,0 +1,22 @@
+name: Docker Hub description
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/dockerhub-description.yaml
+    - README.md
+jobs:
+  update-description:
+    name: Update description
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Update Docker Hub description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ vars.IMAGE_NAME }}
+        enable-url-completion: true

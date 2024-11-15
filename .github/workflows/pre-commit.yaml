@@ -1,0 +1,13 @@
+name: pre-commit
+on:  # yamllint disable-line rule:truthy
+- pull_request
+- push
+jobs:
+  ensure-pre-commit:
+    name: Ensure pre-commit passes
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Run hooks
+      uses: pre-commit/action@v3.0.1

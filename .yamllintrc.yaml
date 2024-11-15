@@ -1,0 +1,30 @@
+rules:
+  anchors:
+    forbid-duplicated-anchors: true
+  braces:
+    forbid: non-empty
+  brackets:
+    forbid: non-empty
+  colons: enable
+  comments: enable
+  comments-indentation: enable
+  empty-lines:
+    max: 1
+  empty-values: enable
+  float-values:
+    require-numeral-before-decimal: true
+  hyphens: enable
+  indentation:
+    spaces: 2
+    indent-sequences: false
+  key-duplicates: enable
+  line-length: enable
+  new-line-at-end-of-file: enable
+  new-lines: enable
+  octal-values:
+    forbid-explicit-octal: false
+  quoted-strings:
+    quote-type: double
+    required: only-when-needed
+  trailing-spaces: enable
+  truthy: enable
