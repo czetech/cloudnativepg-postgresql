@@ -1,0 +1,3 @@
+config-variables:
+- IMAGE_REPOSITORY
+- DOCKERHUB_USERNAME
