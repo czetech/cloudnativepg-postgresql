@@ -1,0 +1,23 @@
+MD003:
+  style: atx
+MD004:
+  style: dash
+MD009:
+  strict: true
+MD013:
+  stern: true
+MD029:
+  style: ordered
+MD046:
+  style: fenced
+MD048:
+  style: backtick
+MD049:
+  style: asterisk
+MD050:
+  style: asterisk
+MD054:
+  collapsed: false
+  url_inline: false
+MD055:
+  style: leading_and_trailing

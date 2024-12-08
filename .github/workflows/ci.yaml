@@ -1,0 +1,78 @@
+name: CI
+# run-name: test-run-name-variants
+on:  # yamllint disable-line rule:truthy
+  pull_request: {}
+  push: {}
+  # schedule:
+  # - cron: 0 1 * * *
+  # workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  pre-commit:
+    name: Ensure pre-commit passes
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Run pre-commit
+      uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+  actions-sha:
+    name: Ensure SHA pinned actions
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Ensure SHA pinned actions
+      uses:
+        # yamllint disable-line rule:line-length
+        zgosalvez/github-actions-ensure-sha-pinned-actions@5d6ac37a4cef8b8df67f482a8e384987766f0213  # v3.0.17
+  list-variants:
+    name: List variants
+    runs-on: ubuntu-24.04
+    outputs:
+      variants: ${{ steps.list-variants.outputs.variants }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - id: get-changed-files
+      name: Get changed files
+      uses:
+        # yamllint disable-line rule:line-length
+        tj-actions/changed-files@4edd678ac3f81e2dc578756871e4d00c19191daf  # v45.0.4
+      with:
+        dir_names: true
+        dir_names_exclude_current_dir: true
+        dir_names_max_depth: "1"
+        matrix: true
+        path: variants
+    - id: list-variants
+      name: List variants
+      run: |
+        ./scripts/list_variants.sh
+        variants_json=$(jq -c '.' variants.json)
+        printf "variants=%s\n" "${variants_json}" >>"${GITHUB_OUTPUT:?}"
+      env:
+        FILTER_VARIANTS: >-
+          ${{
+            contains(fromJSON('["pull_request", "push"]'), github.event_name)
+            && steps.get-changed-files.outputs.all_changed_and_modified_files
+          }}
+    - name: Upload variants to artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: variants
+        path: variants.json
+        if-no-files-found: error
+  test-job-id-build-variants:
+    name: test-job-name-build-variants
+    needs: list-variants
+    if: ${{ needs.list-variants.outputs.variants != '[]' }}
+    uses: ./.github/workflows/build-test.yaml
+    with:
+      variant: ${{ matrix.variant.name }}
+      filter-tags: ${{ matrix.variant.config.filter-tags }}
+    strategy:
+      matrix:
+        variant: ${{ fromJSON(needs.list-variants.outputs.variants) }}
+      fail-fast: false

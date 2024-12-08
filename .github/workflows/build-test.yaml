@@ -1,0 +1,83 @@
+name: test-name-build-test
+run-name: test-run-name-build-test
+on:  # yamllint disable-line rule:truthy
+  workflow_call:
+    inputs:
+      variant:
+        description: Variant name
+        required: true
+        type: string
+      filter-tags:
+        description: Regex pattern to filter tags  # TODO
+        type: string
+# permissions:
+#   contents: read
+jobs:
+  get-digests:
+    name: Get digests
+    runs-on: ubuntu-24.04
+    outputs:
+      digests: ${{ steps.get-digests.outputs.digests }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - id: get-digests
+      name: Get digests
+      run: |
+        ./scripts/get_digests.sh
+        digests_json=$(jq -c '.' digests.json)
+        printf "digests=%s\n" "${digests_json}" >>"${GITHUB_OUTPUT:?}"
+      env:
+        FILTER_TAGS: ${{ inputs.filter-tags }}
+        COMPARE_REPOSITORY: czetech/cloudnativepg-postgresql
+        COMPARE_TAG_SUFFIX: ${{ inputs.variant }}
+    - name: Upload digests to artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: digests-${{ inputs.variant }}
+        path: |
+          digests.json
+          tags.json
+  build:
+    name: Build image
+    needs: get-digests
+    if: ${{ needs.get-digests.outputs.digests != '[]' }}
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: ${{ vars.IMAGE_REPOSITORY }}:test
+      POSTGRESQL_DIGEST: ${{ matrix.digest.digest }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build image
+      uses: docker/build-push-action@v6
+      with:
+        build-args: POSTGRESQL_DIGEST
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        context: variants/${{ inputs.variant }}
+        load: true
+        tags: ${{ env.IMAGE }}
+    - name: Lint image with Dockle
+      uses:
+        erzz/dockle-action@69369bc745ee29813f730231a821bcd4f71cd290  # v1.4.0
+      with:
+        image: ${{ env.IMAGE }}
+        dockle-version: 0.4.14
+        accept-keywords: key
+        accept-filenames: >-
+          usr/local/lib/python3.11/dist-packages/azure/core/settings.py,
+          usr/local/lib/python3.9/dist-packages/azure/core/settings.py
+    - name: Test image
+      run: "\"./variants/${VARIANT:?}/test_image.sh\""
+      env:
+        VARIANT: ${{ inputs.variant }}
+      timeout-minutes: 1
+    strategy:
+      matrix:
+        digest: ${{ fromJSON(needs.get-digests.outputs.digests) }}
+      fail-fast: false
