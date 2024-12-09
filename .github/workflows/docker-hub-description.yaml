@@ -1,0 +1,27 @@
+name: Docker Hub description
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/dockerhub-description.yaml
+    - README.md
+permissions:
+  contents: read
+jobs:
+  update-description:
+    name: Update description
+    runs-on: ubuntu-24.04
+    environment: dockerhub-description
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Update Docker Hub description
+      uses:
+        # yamllint disable-line rule:line-length
+        peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae  # v4.0.0
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ vars.IMAGE_REPOSITORY }}
+        enable-url-completion: true
