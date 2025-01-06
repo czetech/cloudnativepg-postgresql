@@ -47,7 +47,7 @@ jobs:
       name: Get changed files
       uses:
         # yamllint disable-line rule:line-length
-        tj-actions/changed-files@4edd678ac3f81e2dc578756871e4d00c19191daf  # v45.0.4
+        tj-actions/changed-files@d6e91a2266cdb9d62096cebf1e8546899c6aa18f  # v45.0.6
       with:
         dir_names: true
         dir_names_exclude_current_dir: true
